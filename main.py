@@ -31,6 +31,17 @@ def init_db():
             solved INTEGER NOT NULL DEFAULT 0
         )
     """)
+    count = conn.execute("SELECT COUNT(*) FROM problems").fetchone()[0]
+    if count == 0:
+        conn.executemany(
+            "INSERT INTO problems (title, topic, solved) VALUES (?, ?, ?)",
+            [
+                ("Two Sum", "Arrays", 1),
+                ("Valid Parentheses", "Stack", 0),
+                ("Maximum Subarray", "Arrays", 0),
+                ("Binary Search", "Searching", 1),
+            ],
+        )
     conn.commit()
     conn.close()
 
