@@ -12,6 +12,11 @@ app.add_middleware(
     allow_origins=["http://127.0.0.1:5500", "http://localhost:5500"],
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_origins=[
+    "http://127.0.0.1:5500",
+    "http://localhost:5500",
+    "https://dsa-tracker-1-sowf.onrender.com",
+    ],
 )
 
 def get_db():

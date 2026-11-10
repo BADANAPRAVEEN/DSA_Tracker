@@ -1,4 +1,7 @@
-const API = "http://127.0.0.1:8000" || location.hostname === "localhost" ? "http://127.0.0.1:8000" : "https://dsa-tracker-wakr.onrender.com";
+const API =
+    location.hostname === "127.0.0.1" || location.hostname === "localhost"
+        ? "http://127.0.0.1:8000"
+        : "https://dsa-tracker-wakr.onrender.com"; 
 const list = document.getElementById("list");
 
 async function loadProblems() {
