@@ -1,4 +1,6 @@
-import sqlite3
+import os
+import psycopg
+from psycopg.rows import dict_row
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -16,96 +18,92 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+DATABASE_URL = os.environ["DATABASE_URL"]
+
+
 def get_db():
-    conn = sqlite3.connect("tracker.db")
-    conn.row_factory = sqlite3.Row
-    return conn
+    return psycopg.connect(DATABASE_URL, row_factory=dict_row)
+
 
 def init_db():
-    conn = get_db()
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS problems (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL,
-            topic TEXT NOT NULL,
-            solved INTEGER NOT NULL DEFAULT 0
-        )
-    """)
-    count = conn.execute("SELECT COUNT(*) FROM problems").fetchone()[0]
-    if count == 0:
-        conn.executemany(
-            "INSERT INTO problems (title, topic, solved) VALUES (?, ?, ?)",
-            [
-                ("Two Sum", "Arrays", 1),
-                ("Valid Parentheses", "Stack", 0),
-                ("Maximum Subarray", "Arrays", 0),
-                ("Binary Search", "Searching", 1),
-            ],
-        )
-    conn.commit()
-    conn.close()
+    with get_db() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS problems (
+                id SERIAL PRIMARY KEY,
+                title TEXT NOT NULL,
+                topic TEXT NOT NULL,
+                solved BOOLEAN NOT NULL DEFAULT FALSE
+            )
+        """)
+        count = conn.execute("SELECT COUNT(*) AS n FROM problems").fetchone()["n"]
+        if count == 0:
+            with conn.cursor() as cur:
+                cur.executemany(
+                    "INSERT INTO problems (title, topic, solved) VALUES (%s, %s, %s)",
+                    [
+                        ("Two Sum", "Arrays", True),
+                        ("Valid Parentheses", "Stack", False),
+                        ("Maximum Subarray", "Arrays", False),
+                        ("Binary Search", "Searching", True),
+                    ],
+                )
+
 
 init_db()
+
 
 class Problem(BaseModel):
     title: str = Field(min_length=1)
     topic: str = Field(min_length=1)
     solved: bool = False
 
+
 @app.get("/problems")
 def get_problems():
-    conn = get_db()
-    rows = conn.execute("SELECT * FROM problems").fetchall()
-    conn.close()
-    return [dict(row) for row in rows]
+    with get_db() as conn:
+        return conn.execute("SELECT * FROM problems ORDER BY id").fetchall()
+
 
 @app.post("/problems", status_code=201)
 def add_problem(problem: Problem):
-    conn = get_db()
-    cursor = conn.execute(
-        "INSERT INTO problems (title, topic, solved) VALUES (?, ?, ?)",
-        (problem.title, problem.topic, int(problem.solved)),
-    )
-    conn.commit()
-    new_id = cursor.lastrowid
-    conn.close()
-    return {"id": new_id, **problem.model_dump()}
+    with get_db() as conn:
+        row = conn.execute(
+            "INSERT INTO problems (title, topic, solved) VALUES (%s, %s, %s) RETURNING *",
+            (problem.title, problem.topic, problem.solved),
+        ).fetchone()
+    return row
+
 
 @app.delete("/problems/{problem_id}", status_code=204)
 def delete_problem(problem_id: int):
-    conn = get_db()
-    cursor = conn.execute("DELETE FROM problems WHERE id = ?", (problem_id,))
-    conn.commit()
-    deleted = cursor.rowcount
-    conn.close()
+    with get_db() as conn:
+        cursor = conn.execute("DELETE FROM problems WHERE id = %s", (problem_id,))
+        deleted = cursor.rowcount
     if deleted == 0:
         raise HTTPException(status_code=404, detail="Problem not found")
 
+
 @app.patch("/problems/{problem_id}")
 def toggle_solved(problem_id: int):
-    conn = get_db()
-    cursor = conn.execute(
-        "UPDATE problems SET solved = 1 - solved WHERE id = ?", (problem_id,)
-    )
-    conn.commit()
-    if cursor.rowcount == 0:
-        conn.close()
+    with get_db() as conn:
+        row = conn.execute(
+            "UPDATE problems SET solved = NOT solved WHERE id = %s RETURNING *",
+            (problem_id,),
+        ).fetchone()
+    if row is None:
         raise HTTPException(status_code=404, detail="Problem not found")
-    row = conn.execute("SELECT * FROM problems WHERE id = ?", (problem_id,)).fetchone()
-    conn.close()
-    return dict(row)
+    return row
+
 
 @app.get("/stats/topics")
 def topic_stats():
-    conn = get_db()
-    rows = conn.execute("""
-        SELECT topic,
-               COUNT(*) AS total,
-               SUM(solved) AS solved,
-               ROUND(100.0 * SUM(solved) / COUNT(*)) AS percent_solved
-        FROM problems
-        GROUP BY topic
-        ORDER BY percent_solved ASC
-    """).fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
+    with get_db() as conn:
+        return conn.execute("""
+            SELECT topic,
+                   COUNT(*)::int AS total,
+                   SUM(solved::int)::int AS solved,
+                   ROUND(100.0 * SUM(solved::int) / COUNT(*))::int AS percent_solved
+            FROM problems
+            GROUP BY topic
+            ORDER BY percent_solved ASC
+        """).fetchall()

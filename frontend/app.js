@@ -13,7 +13,7 @@ async function loadProblems() {
     list.innerHTML = "";
     problems.forEach(p => {
         const li = document.createElement("li");
-        li.textContent = (p.solved ? "✅ " : "⬜ ") + p.title + " (" + p.topic + ") ";
+        li.textContent = (p.solved ? "✅ " : "❌ ") + p.title + " (" + p.topic + ") ";
 
         const toggle = document.createElement("button");
         toggle.textContent = "Toggle solved";
