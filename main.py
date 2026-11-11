@@ -4,6 +4,7 @@ from psycopg.rows import dict_row
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from typing import Literal
 
 app = FastAPI()
 
@@ -35,16 +36,21 @@ def init_db():
                 solved BOOLEAN NOT NULL DEFAULT FALSE
             )
         """)
+        # Migrations: safe to run every time, because of IF NOT EXISTS
+        conn.execute("ALTER TABLE problems ADD COLUMN IF NOT EXISTS difficulty TEXT NOT NULL DEFAULT 'Medium'")
+        conn.execute("ALTER TABLE problems ADD COLUMN IF NOT EXISTS link TEXT NOT NULL DEFAULT ''")
+        conn.execute("ALTER TABLE problems ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT ''")
+
         count = conn.execute("SELECT COUNT(*) AS n FROM problems").fetchone()["n"]
         if count == 0:
             with conn.cursor() as cur:
                 cur.executemany(
-                    "INSERT INTO problems (title, topic, solved) VALUES (%s, %s, %s)",
+                    "INSERT INTO problems (title, topic, solved, difficulty) VALUES (%s, %s, %s, %s)",
                     [
-                        ("Two Sum", "Arrays", True),
-                        ("Valid Parentheses", "Stack", False),
-                        ("Maximum Subarray", "Arrays", False),
-                        ("Binary Search", "Searching", True),
+                        ("Two Sum", "Arrays", True, "Easy"),
+                        ("Valid Parentheses", "Stack", False, "Easy"),
+                        ("Maximum Subarray", "Arrays", False, "Medium"),
+                        ("Binary Search", "Searching", True, "Easy"),
                     ],
                 )
 
@@ -56,6 +62,9 @@ class Problem(BaseModel):
     title: str = Field(min_length=1)
     topic: str = Field(min_length=1)
     solved: bool = False
+    difficulty: Literal["Easy", "Medium", "Hard"] = "Medium"
+    link: str = ""
+    notes: str = ""
 
 
 @app.get("/problems")
@@ -68,8 +77,10 @@ def get_problems():
 def add_problem(problem: Problem):
     with get_db() as conn:
         row = conn.execute(
-            "INSERT INTO problems (title, topic, solved) VALUES (%s, %s, %s) RETURNING *",
-            (problem.title, problem.topic, problem.solved),
+            """INSERT INTO problems (title, topic, solved, difficulty, link, notes)
+               VALUES (%s, %s, %s, %s, %s, %s) RETURNING *""",
+            (problem.title, problem.topic, problem.solved,
+             problem.difficulty, problem.link, problem.notes),
         ).fetchone()
     return row
 
