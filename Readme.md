@@ -9,7 +9,7 @@ A full-stack web app to track DSA practice problems and find weak topics.
 - Input validation (empty titles are rejected)
 
 ## Tech stack
-- **Backend:** Python, FastAPI, SQLite
+- **Backend:** Python, FastAPI, PostgreSQL(hosted on neon)
 - **Frontend:** HTML, CSS, JavaScript (fetch API)
 
 ## How to run locally
@@ -18,6 +18,7 @@ A full-stack web app to track DSA practice problems and find weak topics.
 3. `uvicorn main:app --reload`
 4. Open `frontend/index.html` with Live Server
 5. API docs are at `http://127.0.0.1:8000/docs`
+6. Set a DATABASE_URL environment variable to a PostgreSQL connection string before running uvicorn
 
 ## API endpoints
 | Method | URL | Purpose |
@@ -34,6 +35,7 @@ A full-stack web app to track DSA practice problems and find weak topics.
 - Designing a SQL table and using `GROUP BY` to compute per-topic statistics.
 - Validating input with Pydantic and returning correct errors, such as 422 for bad data and 404 for a missing row.
 - Using Git and GitHub, including `.gitignore` and small commits.
+- Moved from SQLite to hosted PostgreSQL, using environment variables for credentials so secrets never enter the repo.
 
 ## Future improvements
 - User login, revision reminders, and AI-generated hints
