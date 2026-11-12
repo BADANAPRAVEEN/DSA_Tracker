@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from database import init_db
 from routers.problems import router as problems_router
+from routers.auth import router as auth_router
 
 app = FastAPI()
 
@@ -18,3 +19,4 @@ app.add_middleware(
 
 init_db()
 app.include_router(problems_router)
+app.include_router(auth_router)

@@ -9,3 +9,7 @@ class Problem(BaseModel):
     difficulty: Literal["Easy", "Medium", "Hard"] = "Medium"
     link: str = ""
     notes: str = ""
+
+class UserCreate(BaseModel):
+    email: str = Field(min_length=5, max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    password: str = Field(min_length=8, max_length=64)

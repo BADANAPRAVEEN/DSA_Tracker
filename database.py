@@ -19,6 +19,14 @@ def init_db():
                 solved BOOLEAN NOT NULL DEFAULT FALSE
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                email TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        """)
         conn.execute("ALTER TABLE problems ADD COLUMN IF NOT EXISTS difficulty TEXT NOT NULL DEFAULT 'Medium'")
         conn.execute("ALTER TABLE problems ADD COLUMN IF NOT EXISTS link TEXT NOT NULL DEFAULT ''")
         conn.execute("ALTER TABLE problems ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT ''")
