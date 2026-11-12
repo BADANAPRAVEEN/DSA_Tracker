@@ -8,12 +8,44 @@
 </head>
 <body>
   <h1>DSA Tracker</h1>
-  <input id="title" placeholder="Problem title">
-  <input id="topic" placeholder="Topic">
-  <button id="add">Add</button>
+
+  <div id="message" class="msg"></div>
+
+  <div class="form">
+    <input id="title" placeholder="Problem title">
+    <input id="topic" placeholder="Topic">
+    <select id="difficulty" title="Difficulty" aria-label="Difficulty">
+      <option>Easy</option>
+      <option selected>Medium</option>
+      <option>Hard</option>
+    </select>
+    <input id="link" placeholder="Problem link (optional)">
+    <input id="notes" placeholder="Notes (optional)">
+    <button id="add">Add</button>
+  </div>
+
+  <h2>Filters</h2>
+  <div class="filters">
+    <input id="f-search" placeholder="Search title">
+    <input id="f-topic" placeholder="Topic">
+    <select id="f-difficulty" title="Difficulty filter" aria-label="Difficulty filter">
+      <option value="">Any difficulty</option>
+      <option>Easy</option>
+      <option>Medium</option>
+      <option>Hard</option>
+    </select>
+    <select id="f-solved" title="Solved filter" aria-label="Solved filter">
+      <option value="">Solved or not</option>
+      <option value="true">Solved</option>
+      <option value="false">Unsolved</option>
+    </select>
+  </div>
+
   <ul id="list"></ul>
+
   <h2>Weak topics</h2>
   <div id="stats"></div>
+
   <script src="app.js"></script>
 </body>
 </html>
