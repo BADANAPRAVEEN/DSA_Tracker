@@ -13,3 +13,7 @@ class Problem(BaseModel):
 class UserCreate(BaseModel):
     email: str = Field(min_length=5, max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
     password: str = Field(min_length=8, max_length=64)
+
+class UserLogin(BaseModel):
+    email: str = Field(max_length=254)
+    password: str = Field(max_length=128)
