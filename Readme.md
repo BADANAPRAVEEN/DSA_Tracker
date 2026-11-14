@@ -7,6 +7,9 @@ A full-stack web app to track DSA practice problems and find weak topics.
 - Toggle a problem as solved or unsolved
 - Topic-wise stats, weakest topics first
 - Input validation (empty titles are rejected)
+- User signup and login with JWT authentication and bcrypt-hashed passwords
+- Each user sees only their own problems (new accounts start with 4 sample problems)
+- Filters and search by topic, difficulty and solved status
 
 ## Tech stack
 - **Backend:** Python, FastAPI, PostgreSQL(hosted on neon)
@@ -28,6 +31,8 @@ A full-stack web app to track DSA practice problems and find weak topics.
 | PATCH | /problems/{id} | Toggle solved |
 | DELETE | /problems/{id} | Delete a problem (404 if not found) |
 | GET | /stats/topics | Per-topic stats using SQL GROUP BY |
+| POST | /auth/signup | Create an account (409 if the email exists) |
+| POST | /auth/login | Returns a JWT (401 on wrong credentials) |
 
 ## What I learned
 - How the frontend talks to the backend: HTTP requests with `fetch`, JSON responses, and status codes (2xx success, 4xx client error, 5xx server error).

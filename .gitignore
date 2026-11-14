@@ -2,3 +2,4 @@ venv/
 tracker.db
 __pycache__/
 Notes.md
+.pytest_cache/
