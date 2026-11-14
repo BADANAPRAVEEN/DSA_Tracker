@@ -27,6 +27,10 @@ def init_db():
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
         """)
+
+        conn.execute("ALTER TABLE problems ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE CASCADE")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_problems_user_id ON problems(user_id)")
+        
         conn.execute("ALTER TABLE problems ADD COLUMN IF NOT EXISTS difficulty TEXT NOT NULL DEFAULT 'Medium'")
         conn.execute("ALTER TABLE problems ADD COLUMN IF NOT EXISTS link TEXT NOT NULL DEFAULT ''")
         conn.execute("ALTER TABLE problems ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT ''")
@@ -43,3 +47,15 @@ def init_db():
                         ("Binary Search", "Searching", True, "Easy"),
                     ],
                 )
+
+def seed_sample_problems(conn, user_id: int):
+    with conn.cursor() as cur:
+        cur.executemany(
+            "INSERT INTO problems (title, topic, solved, difficulty, user_id) VALUES (%s, %s, %s, %s, %s)",
+            [
+                ("Two Sum", "Arrays", True, "Easy", user_id),
+                ("Valid Parentheses", "Stack", False, "Easy", user_id),
+                ("Maximum Subarray", "Arrays", False, "Medium", user_id),
+                ("Binary Search", "Searching", True, "Easy", user_id),
+            ],
+        )

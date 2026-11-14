@@ -5,7 +5,30 @@ const API =
 
 const list = document.getElementById("list");
 const message = document.getElementById("message");
+const authMessage = document.getElementById("auth-message");
 let messageTimer;
+
+/* ---------- token storage ---------- */
+
+function getToken() {
+    try { return localStorage.getItem("token"); } catch (e) { return null; }
+}
+
+function saveSession(token, email) {
+    try {
+        localStorage.setItem("token", token);
+        localStorage.setItem("email", email);
+    } catch (e) { /* storage unavailable */ }
+}
+
+function clearSession() {
+    try {
+        localStorage.removeItem("token");
+        localStorage.removeItem("email");
+    } catch (e) { /* ignore */ }
+}
+
+/* ---------- messages ---------- */
 
 function showMessage(text, isError = true) {
     message.textContent = text;
@@ -16,6 +39,116 @@ function showMessage(text, isError = true) {
         message.className = "msg";
     }, 4000);
 }
+
+function showAuthMessage(text, isError = true) {
+    authMessage.textContent = text;
+    authMessage.className = "msg " + (isError ? "error" : "ok");
+}
+
+/* ---------- views ---------- */
+
+function updateView() {
+    const loggedIn = !!getToken();
+    document.getElementById("auth-section").classList.toggle("hidden", loggedIn);
+    document.getElementById("app-section").classList.toggle("hidden", !loggedIn);
+    if (loggedIn) {
+        let email = "";
+        try { email = localStorage.getItem("email") || ""; } catch (e) { /* ignore */ }
+        document.getElementById("user-email").textContent = email;
+        refresh();
+    }
+}
+
+function logout(text) {
+    clearSession();
+    list.innerHTML = "";
+    document.getElementById("stats").innerHTML = "";
+    updateView();
+    if (text) showAuthMessage(text);
+}
+
+/* ---------- fetch wrapper: adds the token to every request ---------- */
+
+async function authFetch(path, options = {}) {
+    const headers = { ...(options.headers || {}) };
+    const token = getToken();
+    if (token) headers["Authorization"] = "Bearer " + token;
+
+    const res = await fetch(API + path, { ...options, headers });
+
+    if (res.status === 401) {
+        logout("Your session has expired. Please log in again.");
+    }
+    return res;
+}
+
+/* ---------- signup and login ---------- */
+
+async function sendAuth(path, email, password) {
+    return fetch(API + "/auth" + path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email, password: password }),
+    });
+}
+
+async function login(email, password) {
+    const res = await sendAuth("/login", email, password);
+    if (!res.ok) {
+        showAuthMessage(res.status === 401
+            ? "Incorrect email or password."
+            : "Could not log in (error " + res.status + ").");
+        return;
+    }
+    const data = await res.json();
+    saveSession(data.access_token, email.trim().toLowerCase());
+    document.getElementById("auth-password").value = "";
+    showAuthMessage("");
+    updateView();
+}
+
+async function handleLogin() {
+    const email = document.getElementById("auth-email").value.trim();
+    const password = document.getElementById("auth-password").value;
+    if (!email || !password) {
+        showAuthMessage("Please enter your email and password.");
+        return;
+    }
+    try {
+        await login(email, password);
+    } catch (err) {
+        showAuthMessage("Cannot reach the server. If it was idle, wait a minute and try again.");
+    }
+}
+
+async function handleSignup() {
+    const email = document.getElementById("auth-email").value.trim();
+    const password = document.getElementById("auth-password").value;
+    if (!email || !password) {
+        showAuthMessage("Please enter an email and a password.");
+        return;
+    }
+    try {
+        const res = await sendAuth("/signup", email, password);
+        if (res.status === 409) {
+            showAuthMessage("That email is already registered. Try logging in.");
+            return;
+        }
+        if (res.status === 422) {
+            showAuthMessage("Enter a valid email and a password of 8 to 64 characters.");
+            return;
+        }
+        if (!res.ok) {
+            showAuthMessage("Could not sign up (error " + res.status + ").");
+            return;
+        }
+        await login(email, password);
+    } catch (err) {
+        showAuthMessage("Cannot reach the server. If it was idle, wait a minute and try again.");
+    }
+}
+
+/* ---------- problems ---------- */
 
 function filterQuery() {
     const params = new URLSearchParams();
@@ -33,9 +166,9 @@ function filterQuery() {
 async function loadProblems() {
     try {
         const qs = filterQuery();
-        const res = await fetch(API + "/problems" + (qs ? "?" + qs : ""));
+        const res = await authFetch("/problems" + (qs ? "?" + qs : ""));
         if (!res.ok) {
-            showMessage("Could not load problems (error " + res.status + ").");
+            if (res.status !== 401) showMessage("Could not load problems (error " + res.status + ").");
             return;
         }
         const problems = await res.json();
@@ -94,7 +227,7 @@ async function loadProblems() {
 
 async function loadStats() {
     try {
-        const res = await fetch(API + "/stats/topics");
+        const res = await authFetch("/stats/topics");
         if (!res.ok) return;
         const stats = await res.json();
         const box = document.getElementById("stats");
@@ -123,7 +256,7 @@ async function addProblem() {
         return;
     }
     try {
-        const res = await fetch(API + "/problems", {
+        const res = await authFetch("/problems", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -135,6 +268,7 @@ async function addProblem() {
             }),
         });
         if (!res.ok) {
+            if (res.status === 401) return;
             showMessage(res.status === 422
                 ? "Some of the values are not valid."
                 : "Could not add the problem (error " + res.status + ").");
@@ -152,8 +286,11 @@ async function addProblem() {
 
 async function toggleSolved(id) {
     try {
-        const res = await fetch(API + "/problems/" + id, { method: "PATCH" });
-        if (!res.ok) { showMessage("Could not update (error " + res.status + ")."); return; }
+        const res = await authFetch("/problems/" + id, { method: "PATCH" });
+        if (!res.ok) {
+            if (res.status !== 401) showMessage("Could not update (error " + res.status + ").");
+            return;
+        }
         refresh();
     } catch (err) {
         showMessage("Cannot reach the server.");
@@ -162,13 +299,18 @@ async function toggleSolved(id) {
 
 async function deleteProblem(id) {
     try {
-        const res = await fetch(API + "/problems/" + id, { method: "DELETE" });
-        if (!res.ok) { showMessage("Could not delete (error " + res.status + ")."); return; }
+        const res = await authFetch("/problems/" + id, { method: "DELETE" });
+        if (!res.ok) {
+            if (res.status !== 401) showMessage("Could not delete (error " + res.status + ").");
+            return;
+        }
         refresh();
     } catch (err) {
         showMessage("Cannot reach the server.");
     }
 }
+
+/* ---------- events ---------- */
 
 function debounce(fn, delay) {
     let timer;
@@ -178,10 +320,17 @@ function debounce(fn, delay) {
     };
 }
 
+document.getElementById("login-btn").addEventListener("click", handleLogin);
+document.getElementById("signup-btn").addEventListener("click", handleSignup);
+document.getElementById("logout-btn").addEventListener("click", () => logout(""));
+document.getElementById("auth-password").addEventListener("keydown", e => {
+    if (e.key === "Enter") handleLogin();
+});
+
 document.getElementById("add").addEventListener("click", addProblem);
 document.getElementById("f-search").addEventListener("input", debounce(loadProblems, 300));
 document.getElementById("f-topic").addEventListener("input", debounce(loadProblems, 300));
 document.getElementById("f-difficulty").addEventListener("change", loadProblems);
 document.getElementById("f-solved").addEventListener("change", loadProblems);
 
-refresh();
+updateView();

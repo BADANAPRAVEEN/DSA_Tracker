@@ -1,6 +1,7 @@
 from typing import Literal, Optional
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from database import get_db
+from routers.auth import get_current_user
 from schemas import Problem
 
 router = APIRouter()
@@ -12,9 +13,10 @@ def get_problems(
     difficulty: Optional[Literal["Easy", "Medium", "Hard"]] = None,
     solved: Optional[bool] = None,
     search: Optional[str] = None,
+    user_id: int = Depends(get_current_user),
 ):
-    query = "SELECT * FROM problems WHERE TRUE"
-    params = []
+    query = "SELECT * FROM problems WHERE user_id = %s"
+    params = [user_id]
 
     if topic:
         query += " AND topic ILIKE %s"
@@ -36,32 +38,35 @@ def get_problems(
 
 
 @router.post("/problems", status_code=201)
-def add_problem(problem: Problem):
+def add_problem(problem: Problem, user_id: int = Depends(get_current_user)):
     with get_db() as conn:
         row = conn.execute(
-            """INSERT INTO problems (title, topic, solved, difficulty, link, notes)
-               VALUES (%s, %s, %s, %s, %s, %s) RETURNING *""",
+            """INSERT INTO problems (title, topic, solved, difficulty, link, notes, user_id)
+               VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING *""",
             (problem.title, problem.topic, problem.solved,
-             problem.difficulty, problem.link, problem.notes),
+             problem.difficulty, problem.link, problem.notes, user_id),
         ).fetchone()
     return row
 
 
 @router.delete("/problems/{problem_id}", status_code=204)
-def delete_problem(problem_id: int):
+def delete_problem(problem_id: int, user_id: int = Depends(get_current_user)):
     with get_db() as conn:
-        cursor = conn.execute("DELETE FROM problems WHERE id = %s", (problem_id,))
+        cursor = conn.execute(
+            "DELETE FROM problems WHERE id = %s AND user_id = %s",
+            (problem_id, user_id),
+        )
         deleted = cursor.rowcount
     if deleted == 0:
         raise HTTPException(status_code=404, detail="Problem not found")
 
 
 @router.patch("/problems/{problem_id}")
-def toggle_solved(problem_id: int):
+def toggle_solved(problem_id: int, user_id: int = Depends(get_current_user)):
     with get_db() as conn:
         row = conn.execute(
-            "UPDATE problems SET solved = NOT solved WHERE id = %s RETURNING *",
-            (problem_id,),
+            "UPDATE problems SET solved = NOT solved WHERE id = %s AND user_id = %s RETURNING *",
+            (problem_id, user_id),
         ).fetchone()
     if row is None:
         raise HTTPException(status_code=404, detail="Problem not found")
@@ -69,7 +74,7 @@ def toggle_solved(problem_id: int):
 
 
 @router.get("/stats/topics")
-def topic_stats():
+def topic_stats(user_id: int = Depends(get_current_user)):
     with get_db() as conn:
         return conn.execute("""
             SELECT topic,
@@ -77,6 +82,7 @@ def topic_stats():
                    SUM(solved::int)::int AS solved,
                    ROUND(100.0 * SUM(solved::int) / COUNT(*))::int AS percent_solved
             FROM problems
+            WHERE user_id = %s
             GROUP BY topic
             ORDER BY percent_solved ASC
-        """).fetchall()
+        """, (user_id,)).fetchall()

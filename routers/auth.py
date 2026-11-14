@@ -4,8 +4,9 @@ from datetime import datetime, timedelta, timezone
 import bcrypt
 import jwt
 import psycopg
-from fastapi import APIRouter, HTTPException
-from database import get_db
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from database import get_db, seed_sample_problems
 from schemas import UserCreate, UserLogin
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -28,6 +29,22 @@ def create_token(user_id: int) -> str:
         "exp": datetime.now(timezone.utc) + timedelta(minutes=TOKEN_MINUTES),
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+bearer_scheme = HTTPBearer(auto_error=False)
+
+
+def get_current_user(creds: HTTPAuthorizationCredentials = Depends(bearer_scheme)) -> int:
+    if creds is None:
+        raise HTTPException(status_code=401, detail="Not logged in")
+    try:
+        payload = jwt.decode(creds.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        return int(payload["sub"])
+    except (jwt.PyJWTError, KeyError, ValueError):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 
 @router.post("/login")
@@ -66,6 +83,7 @@ def signup(user: UserCreate):
                 "INSERT INTO users (email, password_hash) VALUES (%s, %s) RETURNING id, email",
                 (email, password_hash),
             ).fetchone()
+            seed_sample_problems(conn, row["id"])
     except psycopg.errors.UniqueViolation:
         raise HTTPException(status_code=409, detail="Email already registered")
 
