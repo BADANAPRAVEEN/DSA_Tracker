@@ -35,6 +35,12 @@ def init_db():
         conn.execute("ALTER TABLE problems ADD COLUMN IF NOT EXISTS link TEXT NOT NULL DEFAULT ''")
         conn.execute("ALTER TABLE problems ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT ''")
 
+        conn.execute("ALTER TABLE problems ADD COLUMN IF NOT EXISTS review_stage INTEGER NOT NULL DEFAULT 0")
+        conn.execute("ALTER TABLE problems ADD COLUMN IF NOT EXISTS next_review DATE")
+        conn.execute("ALTER TABLE problems ADD COLUMN IF NOT EXISTS last_reviewed DATE")
+        # Solved problems from before the scheduler existed become due today
+        conn.execute("UPDATE problems SET next_review = CURRENT_DATE WHERE solved AND next_review IS NULL")
+
         count = conn.execute("SELECT COUNT(*) AS n FROM problems").fetchone()["n"]
         if count == 0:
             with conn.cursor() as cur:
@@ -59,3 +65,7 @@ def seed_sample_problems(conn, user_id: int):
                 ("Binary Search", "Searching", True, "Easy", user_id),
             ],
         )
+    conn.execute(
+        "UPDATE problems SET next_review = CURRENT_DATE WHERE user_id = %s AND solved",
+        (user_id,),
+    )

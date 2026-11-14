@@ -2,9 +2,10 @@ from typing import Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from database import get_db
 from routers.auth import get_current_user
-from schemas import Problem
+from schemas import Problem, ReviewResult
 
 router = APIRouter()
+INTERVAL_DAYS = [1, 3, 7, 14, 30]
 
 
 @router.get("/problems")
@@ -65,7 +66,11 @@ def delete_problem(problem_id: int, user_id: int = Depends(get_current_user)):
 def toggle_solved(problem_id: int, user_id: int = Depends(get_current_user)):
     with get_db() as conn:
         row = conn.execute(
-            "UPDATE problems SET solved = NOT solved WHERE id = %s AND user_id = %s RETURNING *",
+            """UPDATE problems
+               SET solved = NOT solved,
+                   review_stage = 0,
+                   next_review = CASE WHEN solved THEN NULL ELSE CURRENT_DATE + 1 END
+               WHERE id = %s AND user_id = %s RETURNING *""",
             (problem_id, user_id),
         ).fetchone()
     if row is None:
@@ -86,3 +91,42 @@ def topic_stats(user_id: int = Depends(get_current_user)):
             GROUP BY topic
             ORDER BY percent_solved ASC
         """, (user_id,)).fetchall()
+
+
+@router.get("/problems/due")
+def due_problems(user_id: int = Depends(get_current_user)):
+    with get_db() as conn:
+        return conn.execute(
+            """SELECT * FROM problems
+               WHERE user_id = %s AND solved AND next_review <= CURRENT_DATE
+               ORDER BY next_review, id""",
+            (user_id,),
+        ).fetchall()
+
+
+@router.post("/problems/{problem_id}/review")
+def review_problem(problem_id: int, result: ReviewResult, user_id: int = Depends(get_current_user)):
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT review_stage, solved FROM problems WHERE id = %s AND user_id = %s",
+            (problem_id, user_id),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Problem not found")
+        if not row["solved"]:
+            raise HTTPException(status_code=409, detail="Only solved problems can be reviewed")
+
+        if result.remembered:
+            stage = min(row["review_stage"] + 1, len(INTERVAL_DAYS) - 1)
+        else:
+            stage = 0
+
+        updated = conn.execute(
+            """UPDATE problems
+               SET review_stage = %s,
+                   next_review = CURRENT_DATE + %s::int,
+                   last_reviewed = CURRENT_DATE
+               WHERE id = %s AND user_id = %s RETURNING *""",
+            (stage, INTERVAL_DAYS[stage], problem_id, user_id),
+        ).fetchone()
+    return updated

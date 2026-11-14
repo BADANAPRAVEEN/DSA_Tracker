@@ -4,6 +4,7 @@ const API =
         : "https://dsa-tracker-wakr.onrender.com";
 
 const list = document.getElementById("list");
+const dueList = document.getElementById("due-list");
 const message = document.getElementById("message");
 const authMessage = document.getElementById("auth-message");
 let messageTimer;
@@ -62,6 +63,7 @@ function updateView() {
 function logout(text) {
     clearSession();
     list.innerHTML = "";
+    dueList.innerHTML = "";
     document.getElementById("stats").innerHTML = "";
     updateView();
     if (text) showAuthMessage(text);
@@ -243,9 +245,71 @@ async function loadStats() {
     }
 }
 
+async function loadDue() {
+    try {
+        const res = await authFetch("/problems/due");
+        if (!res.ok) return;
+        const due = await res.json();
+
+        dueList.innerHTML = "";
+        if (due.length === 0) {
+            dueList.innerHTML = "<li>Nothing due today. 🎉</li>";
+            return;
+        }
+
+        due.forEach(p => {
+            const li = document.createElement("li");
+
+            const main = document.createElement("div");
+            main.textContent = p.title + " (" + p.topic + ") ";
+            const badge = document.createElement("span");
+            badge.textContent = p.difficulty;
+            badge.className = "badge " + p.difficulty.toLowerCase();
+            main.appendChild(badge);
+            li.appendChild(main);
+
+            const yes = document.createElement("button");
+            yes.textContent = "Remembered";
+            yes.addEventListener("click", () => reviewProblem(p.id, true));
+            li.appendChild(yes);
+
+            const no = document.createElement("button");
+            no.textContent = "Forgot";
+            no.className = "danger";
+            no.addEventListener("click", () => reviewProblem(p.id, false));
+            li.appendChild(no);
+
+            dueList.appendChild(li);
+        });
+    } catch (err) {
+        /* the due list is optional, so fail quietly */
+    }
+}
+
+async function reviewProblem(id, remembered) {
+    try {
+        const res = await authFetch("/problems/" + id + "/review", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ remembered: remembered }),
+        });
+        if (!res.ok) {
+            if (res.status !== 401) showMessage("Could not save the review (error " + res.status + ").");
+            return;
+        }
+        showMessage(remembered
+            ? "Nice! You'll see it again later."
+            : "No problem, you'll see it again tomorrow.", false);
+        refresh();
+    } catch (err) {
+        showMessage("Cannot reach the server.");
+    }
+}
+
 function refresh() {
     loadProblems();
     loadStats();
+    loadDue();
 }
 
 async function addProblem() {
