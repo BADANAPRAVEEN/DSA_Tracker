@@ -15,6 +15,7 @@ A full-stack web app to track DSA practice problems and find weak topics. Each u
 - Topic-wise stats with the weakest topics first
 - Input validation and friendly error messages
 - Automated test suite (pytest)
+- Spaced-repetition revision scheduler with a "due today" list.
 
 ## Tech stack
 - **Backend:** Python, FastAPI, PostgreSQL (psycopg), Pydantic
@@ -39,6 +40,8 @@ The frontend never touches the database. It sends HTTP requests with a Bearer to
 | PATCH | /problems/{id} | Yes | Toggle solved (404 if not mine) |
 | DELETE | /problems/{id} | Yes | Delete a problem (204, or 404 if not mine) |
 | GET | /stats/topics | Yes | Per-topic stats using SQL GROUP BY, weakest first |
+| GET | /problems/due |
+|POST | /problems/{id}/review |
 
 ## Security
 - Passwords are hashed with bcrypt (salted), never stored in plain text.
@@ -95,6 +98,5 @@ dsa-tracker/
 - Free hosting sleeps when idle, so the first request can be slow.
 
 ## Planned improvements
-- Revision scheduler with spaced repetition
 - Progress dashboard with charts
 - AI-generated hints
